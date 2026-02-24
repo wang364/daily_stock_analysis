@@ -269,10 +269,36 @@ class LLMToolAdapter:
             temperature=config.gemini_temperature,
         )
 
-        response = model.generate_content(
-            contents=contents,
-            generation_config=generation_config,
-        )
+        # For tool calling, use the model's chat mode which handles thought signatures automatically
+        try:
+            # Try using chat mode first (recommended for tool calling in Gemini 2.0+)
+            if tools and len(contents) > 0:
+                chat = model.start_chat(history=[])
+                # Send the first user message
+                first_msg = contents[0]
+                if first_msg.parts:
+                    text_part = first_msg.parts[0].text if hasattr(first_msg.parts[0], 'text') else str(first_msg.parts[0])
+                    response = chat.send_message(
+                        text_part,
+                        generation_config=generation_config,
+                    )
+                else:
+                    response = model.generate_content(
+                        contents=contents,
+                        generation_config=generation_config,
+                    )
+            else:
+                response = model.generate_content(
+                    contents=contents,
+                    generation_config=generation_config,
+                )
+        except Exception as e:
+            # Fallback to standard generate_content if chat mode fails
+            logger.warning(f"Chat mode failed, falling back to generate_content: {e}")
+            response = model.generate_content(
+                contents=contents,
+                generation_config=generation_config,
+            )
 
         # Parse response
         tool_calls = []
